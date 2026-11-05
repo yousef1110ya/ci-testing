@@ -1,0 +1,7 @@
+.git
+.github
+k8s
+README.md
+Dockerfile
+.dockerignore
+*.md

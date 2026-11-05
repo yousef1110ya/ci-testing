@@ -1,0 +1,52 @@
+name: build-and-deploy
+
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+env:
+  IMAGE: ci-test-app:${{ github.sha }}
+  NAMESPACE: ci-test
+  SSH_TARGET: ${{ secrets.NODE_USER }}@${{ secrets.NODE_HOST }}
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build image
+        run: docker build -t "$IMAGE" .
+
+      - name: Write SSH key and known_hosts
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "${{ secrets.NODE_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          printf '%s\n' "${{ secrets.NODE_KNOWN_HOSTS }}" > ~/.ssh/known_hosts
+
+      - name: Import image onto the node (containerd)
+        run: |
+          docker save "$IMAGE" \
+            | ssh -i ~/.ssh/deploy_key "$SSH_TARGET" 'sudo ctr -n k8s.io images import -'
+
+      - name: Create namespace
+        run: |
+          ssh -i ~/.ssh/deploy_key "$SSH_TARGET" 'kubectl apply -f -' < k8s/namespace.yaml
+
+      - name: Apply manifests
+        run: |
+          cat k8s/deployment.yaml k8s/service.yaml \
+            | ssh -i ~/.ssh/deploy_key "$SSH_TARGET" "kubectl -n $NAMESPACE apply -f -"
+
+      - name: Roll out new image
+        run: |
+          ssh -i ~/.ssh/deploy_key "$SSH_TARGET" \
+            "kubectl -n $NAMESPACE set image deployment/ci-test-app ci-test-app=$IMAGE"
+          ssh -i ~/.ssh/deploy_key "$SSH_TARGET" \
+            "kubectl -n $NAMESPACE rollout status deployment/ci-test-app --timeout=120s"
+
+      - name: Remove SSH key
+        if: always()
+        run: shred -u ~/.ssh/deploy_key || true
