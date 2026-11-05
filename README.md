@@ -29,18 +29,26 @@ Everything runs in the **`ci-test`** namespace.
 ## CI/CD
 
 Runs on push to `main`/`master` and on manual trigger (`workflow_dispatch`).
-It builds the image, `docker save`s it, pipes it over SSH into the node's
-containerd (`ctr -n k8s.io images import`), applies the manifests, then
-`set image` + `rollout status` to roll out `ci-test-app:<git-sha>`.
+It **clones the source from a private Codeberg repo** (over HTTPS with
+username/password), builds the image, `docker save`s it, pipes it over SSH
+into the node's containerd (`ctr -n k8s.io images import`), applies the
+manifests, then `set image` + `rollout status` to roll out
+`ci-test-app:<git-sha>`.
 
 Required repository **secrets**:
 
-| Secret              | Meaning                                         |
-|---------------------|-------------------------------------------------|
-| `NODE_HOST`         | node hostname / IP                              |
-| `NODE_USER`         | SSH user                                        |
-| `NODE_SSH_KEY`      | private SSH key for that user                   |
-| `NODE_KNOWN_HOSTS`  | `known_hosts` entry for the node (ssh-keyscan)  |
+| Secret              | Meaning                                              |
+|---------------------|------------------------------------------------------|
+| `CODEBERG_REPO`     | Codeberg repo slug, format `owner/repo`              |
+| `CODEBERG_USERNAME` | Codeberg username                                    |
+| `CODEBERG_PASSWORD` | Codeberg password or access token                    |
+| `NODE_HOST`         | node hostname / IP                                   |
+| `NODE_USER`         | SSH user                                             |
+| `NODE_SSH_KEY`      | private SSH key for that user                        |
+| `NODE_KNOWN_HOSTS`  | `known_hosts` entry for the node (ssh-keyscan)       |
+
+The `master` branch is cloned. Credentials are passed via `GIT_ASKPASS`, so
+they never appear in the command line or the build logs.
 
 The SSH user needs `sudo ctr` and `kubectl` access on the node.
 

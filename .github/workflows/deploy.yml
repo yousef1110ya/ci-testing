@@ -14,7 +14,29 @@ jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Clone source from Codeberg (private repo)
+        env:
+          CODEBERG_USERNAME: ${{ secrets.CODEBERG_USERNAME }}
+          CODEBERG_PASSWORD: ${{ secrets.CODEBERG_PASSWORD }}
+          CODEBERG_REPO: ${{ secrets.CODEBERG_REPO }}   # format: owner/repo
+        run: |
+          # Feed credentials via GIT_ASKPASS so they never appear on the
+          # command line, in the remote URL, or in the build logs.
+          cat > "$RUNNER_TEMP/askpass.sh" <<'EOF'
+          #!/usr/bin/env bash
+          case "$1" in
+            Username*) printf '%s' "$CODEBERG_USERNAME" ;;
+            Password*) printf '%s' "$CODEBERG_PASSWORD" ;;
+          esac
+          EOF
+          chmod +x "$RUNNER_TEMP/askpass.sh"
+
+          # Clone into the (empty) workspace so later steps see the files at root.
+          GIT_ASKPASS="$RUNNER_TEMP/askpass.sh" GIT_TERMINAL_PROMPT=0 \
+            git clone --depth 1 --branch master \
+            "https://codeberg.org/${CODEBERG_REPO}.git" .
+
+          rm -f "$RUNNER_TEMP/askpass.sh"
 
       - name: Build image
         run: docker build -t "$IMAGE" .
