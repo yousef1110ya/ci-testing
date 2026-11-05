@@ -3,12 +3,10 @@ FROM golang:1.23-alpine AS build
 
 WORKDIR /src
 
-# Download dependencies first (go mod download writes go.sum) so this layer
-# is cached as long as go.mod doesn't change.
-COPY go.mod ./
-RUN go mod download
-
 COPY . .
+
+# Resolve deps and write go.sum (no go.sum is committed), then build.
+RUN go mod tidy
 
 # Static build so it runs on a minimal base image.
 RUN CGO_ENABLED=0 GOOS=linux go build -o /ci-test-app .
