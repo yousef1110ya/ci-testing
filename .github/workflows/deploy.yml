@@ -62,8 +62,10 @@ jobs:
 
       - name: Apply manifests
         run: |
-          cat k8s/deployment.yaml k8s/service.yaml \
-            | ssh -i ~/.ssh/deploy_key "$SSH_TARGET" "$KUBECTL -n $NAMESPACE apply -f -"
+          # Apply each manifest as its own stream. Concatenating them with cat
+          # would merge the YAML docs (no `---` separator) and drop the Deployment.
+          ssh -i ~/.ssh/deploy_key "$SSH_TARGET" "$KUBECTL -n $NAMESPACE apply -f -" < k8s/deployment.yaml
+          ssh -i ~/.ssh/deploy_key "$SSH_TARGET" "$KUBECTL -n $NAMESPACE apply -f -" < k8s/service.yaml
 
       - name: Roll out new image
         run: |
