@@ -9,6 +9,9 @@ env:
   IMAGE: ci-test-app:${{ github.sha }}
   NAMESPACE: ci-test
   SSH_TARGET: ${{ secrets.NODE_USER }}@${{ secrets.NODE_HOST }}
+  # kubeadm admin kubeconfig is root-owned; a non-interactive SSH session
+  # doesn't source the user's profile, so point kubectl at it explicitly.
+  KUBECTL: sudo kubectl --kubeconfig=/etc/kubernetes/admin.conf
 
 jobs:
   build-and-deploy:
@@ -55,19 +58,19 @@ jobs:
 
       - name: Create namespace
         run: |
-          ssh -i ~/.ssh/deploy_key "$SSH_TARGET" 'kubectl apply -f -' < k8s/namespace.yaml
+          ssh -i ~/.ssh/deploy_key "$SSH_TARGET" "$KUBECTL apply -f -" < k8s/namespace.yaml
 
       - name: Apply manifests
         run: |
           cat k8s/deployment.yaml k8s/service.yaml \
-            | ssh -i ~/.ssh/deploy_key "$SSH_TARGET" "kubectl -n $NAMESPACE apply -f -"
+            | ssh -i ~/.ssh/deploy_key "$SSH_TARGET" "$KUBECTL -n $NAMESPACE apply -f -"
 
       - name: Roll out new image
         run: |
           ssh -i ~/.ssh/deploy_key "$SSH_TARGET" \
-            "kubectl -n $NAMESPACE set image deployment/ci-test-app ci-test-app=$IMAGE"
+            "$KUBECTL -n $NAMESPACE set image deployment/ci-test-app ci-test-app=$IMAGE"
           ssh -i ~/.ssh/deploy_key "$SSH_TARGET" \
-            "kubectl -n $NAMESPACE rollout status deployment/ci-test-app --timeout=120s"
+            "$KUBECTL -n $NAMESPACE rollout status deployment/ci-test-app --timeout=120s"
 
       - name: Remove SSH key
         if: always()
